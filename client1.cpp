@@ -5,7 +5,11 @@
 #include <algorithm>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include<chrono>
+#include<mutex>
 #pragma comment(lib, "ws2_32.lib")
+
+std::mutex coutMutex; // Mutex to protect access to std::cout
 
 void receiveMessages(int socket)
 {
@@ -18,9 +22,15 @@ void receiveMessages(int socket)
         if (bytes <= 0)
             break; // If server disconnects or an error occurs, break the loop
 
-        std::cout << "Message: " << buffer << std::endl;
+        // Lock mutex before printing to std::cout
+        {
+            std::lock_guard<std::mutex> lock(coutMutex);
+            std::cout << "Message: " << buffer << std::endl;
+        }
 
-
+        //reprinting prompt after receiving message
+        std::cout << "Enter from your side: ";
+        std::cout.flush(); // Ensure the prompt is printed immediately
     }
 }
 
@@ -42,7 +52,11 @@ int main()
 
     // Connect to the server
     connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    std::cout << "Connected to the server.\n";
+    {
+        std::lock_guard<std::mutex> lock(coutMutex);
+        std::cout << "Connected to the server.\n";
+    }
+    
 
     // Start a thread to receive messages from the server
     std::thread receiveThread(receiveMessages, clientSocket); 
@@ -50,8 +64,13 @@ int main()
     // main loop
     while(true)
     {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Sleep for a short time to prevent busy waiting
         std::string message;
-        std::cout << "Enter from your side: ";
+        {
+            std::lock_guard<std::mutex> lock(coutMutex);
+            std::cout << "Enter from your side: "<< std::flush <<std::endl; // Print the prompt without a newline and flush the output
+            
+        }
         std::getline(std::cin, message); // Read user input
 
         if (message == "exit")
